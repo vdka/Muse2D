@@ -1,6 +1,6 @@
 
-#ifndef TD2D_h
-#define TD2D_h
+#ifndef  MUSE2D_H
+#define MUSE2D_H
 
 #include <stdio.h>
 #include <stdint.h>
@@ -20,6 +20,8 @@ typedef uint32_t u32;
 typedef int64_t  i64;
 typedef uint64_t u64;
 
+typedef u32 uint;
+
 typedef float  f32;
 typedef double f64;
 
@@ -28,7 +30,7 @@ typedef i16 b16;
 typedef i32 b32;
 
 typedef size_t    usize;
-typedef ptrdiff_t offset;
+typedef ptrdiff_t isize;
 
 #if !defined(__cplusplus)
     #if !defined(__STDC_VERSION__)
@@ -99,29 +101,10 @@ typedef struct Rect {
     f32 x, y, width, height;
 } Rect;
 
-// Rectangle type
-typedef struct BoundingBox {
-    V2 topLeft;
-    V2 bottomRight;
-} BoundingBox;
-
-// Image type, bpp always RGBA (32bit)
-// NOTE: Data stored in CPU memory (RAM)
-typedef struct Image {
-    void *data;             // Image raw data
-    i32 width;              // Image base width
-    i32 height;             // Image base height
-    i32 mipmaps;            // Mipmap levels, 1 by default
-    TextureFormat format;   // Data format (TextureFormat)
-} Image;
-
 // NOTE: Data stored in GPU memory
 typedef struct Texture {
-    u32 id;                 // OpenGL texture id
-    i32 width;              // Texture base width
-    i32 height;             // Texture base height
-    i32 mipmaps;            // Mipmap levels, 1 by default
-    TextureFormat format;   // Data format (TextureFormat)
+    V2  topLeft;            // the topleft coordinate of the texture in the atlas
+    V2  bottomRight;        // the bottomright coordinate of the texture in the atlas
 } Texture;
 
 // Quaternion type
@@ -160,6 +143,7 @@ typedef struct Camera {
 #define BLACK      (Color){ 0, 0, 0, 255 }         // Black
 #define BLANK      (Color){ 0, 0, 0, 0 }           // Blank (Transparent)
 #define MAGENTA    (Color){ 255, 0, 255, 255 }     // Magenta
+#define RAYWHITE   (Color){ 245, 245, 245, 255 }   // My own White (raylib logo)
 
 
 /**API*****************************/
@@ -181,28 +165,39 @@ extern "C" {            // Prevents name mangling of functions
 
 API void InitWindow(i32 width, i32 height, const char* title);                      // Initialize Window and OpenGL Graphics
 API void CloseWindow(void);                                                         // Close Window and Terminate Context
-API b32 WindowShouldClose(void);                                                    // Detect if KEY_ESCAPE pressed or Close icon pressed
-API b32 IsWindowMinimized(void);                                                    // Detect if window is minimized (or lost focus)
-API V2 GetWindowDimentions(void);                                                   // Returns the current dimentions of the window
+API b32  WindowShouldClose(void);                                                   // Detect if KEY_ESCAPE pressed or Close icon pressed
+API b32  IsWindowMinimized(void);                                                   // Detect if window is minimized (or lost focus)
+API V2   GetWindowDimentions(void);                                                 // Returns the current dimentions of the window
 API void ToggleFullscreen(void);                                                    // Fullscreen toggle
 
-API V2 GetMousePosition(void);                                                      // Returns the current mouse position
+API b32  IsMouseButtonPressed(i32 button);                                          // Detect if a mouse button has been pressed once
+API b32  IsMouseButtonDown(i32 button);                                             // Detect if a mouse button is being pressed
+API b32  IsMouseButtonReleased(i32 button);                                         // Detect if a mouse button has been released once
+API b32  IsMouseButtonUp(i32 button);                                               // Detect if a mouse button is NOT being pressed
+API i32  GetMouseX(void);                                                           // Returns mouse position X
+API i32  GetMouseY(void);                                                           // Returns mouse position Y
+API V2   GetMousePosition(void);                                                    // Returns the current mouse position
+API void SetMousePosition(V2 position);                                        // Set mouse position XY
+API i32  GetMouseWheelMove(void);                                                   // Returns mouse wheel movement Y
 
-API b32 IsKeyPressed(i32 key);                                                      // Detect if a key has been pressed once
-API b32 IsKeyDown(i32 key);                                                         // Detect if a key is being pressed
-API b32 IsKeyReleased(i32 key);                                                     // Detect if a key has been released once
-API b32 IsKeyUp(i32 key);                                                           // Detect if a key is NOT being pressed
-API i32 GetKeyPressed(void);                                                        // Get latest key pressed
+
+API b32  IsKeyPressed(i32 key);                                                     // Detect if a key has been pressed once
+API b32  IsKeyDown(i32 key);                                                        // Detect if a key is being pressed
+API b32  IsKeyReleased(i32 key);                                                    // Detect if a key has been released once
+API b32  IsKeyUp(i32 key);                                                          // Detect if a key is NOT being pressed
+API i32  GetKeyPressed(void);                                                       // Get latest key pressed
 API void SetExitKey(i32 key);                                                       // Set a custom key to exit program (default is ESC)
 
 API void ClearBackground(Color color);                                              // Sets Background Color
 API void BeginFrame(void);                                                          // Setup drawing canvas to start drawing
 API void EndFrame(void);                                                            // End canvas drawing and Swap Buffers (Double Bufferi
-API f64 GetTime(void);                                                              // Returns the time since InitTimer() was cal
+API f64  GetTime(void);                                                             // Returns the time since InitTimer() was cal
 
 API void SetLineWidth(f32 width);                                                   // Set the width of the lines drawn
 
 API void DrawPoint(f32 x, f32 y, Color color);                                      // Draw a single 'point'
+
+API void DrawLine(f32 x1, f32 y1, f32 x2, f32 y2, Color color);                     // Draw a line between 2 points
 
 API void DrawTri(V2 v1, V2 v2, V2 v3, Color color);                                 // Draw a Triangle outline
 API void FillTri(V2 v1, V2 v2, V2 v3, Color color);                                 // Fill a Triangle
@@ -235,8 +230,8 @@ API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
 /*                                                                         */
 /***************************************************************************/
 
-#if defined(TD2D_IMPLEMENTATION) && !defined(TD2D_IMPLEMENTATION_DONE)
-#define TD2D_IMPLEMENTATION_DONE
+#if defined(MUSE2D_IMPLEMENTATION) && !defined(MUSE2D_IMPLEMENTATION_DONE)
+#define MUSE2D_IMPLEMENTATION_DONE
 
 // Include GLEW first; It's magic
 #include <glad/glad.h>
@@ -245,7 +240,9 @@ API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
 #undef GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
 
-/*****************************************************************/
+#include "stb_image.h"
+
+/**GLOBALS********************************************************/
 /*                                                               */
 /*    ######   ##        #######  ########     ###    ##         */
 /*   ##    ##  ##       ##     ## ##     ##   ## ##   ##         */
@@ -253,7 +250,7 @@ API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
 /*   ##   #### ##       ##     ## ########  ##     ## ##         */
 /*   ##    ##  ##       ##     ## ##     ## ######### ##         */
 /*   ##    ##  ##       ##     ## ##     ## ##     ## ##         */
-/*    ######   ########  GLOBALS  ########  ##     ## ########   */
+/*    ######   ########  #######  ########  ##     ## ########   */
 /*                                                               */
 /*****************************************************************/
 
@@ -305,9 +302,19 @@ typedef struct Shader {
     i32 cameraLoc;
 } Shader;
 
+typedef struct Atlas {
+    u32 id;         // the OpenGL Texture id
+    u32 width;      // the total width of the atlas texture
+    u32 height;     // the total height of the atlas texture
+    i32 mipmaps;    // the number of mipmaps
+    u32 nextX;      // the next X coordinate to put something into
+    u32 nextY;      // the next Y coordinate to put something into
+    Color pixels[];
+} Atlas;
+
 // typically (GL_POINTS | GL_LINES | GL_LINE_LOOP | GL_TRIANGLES | GL_TRIANGLE_STRIP)
 // Buffers used for storing vertices from Draw & Fill calls before unloading to GPU
-typedef struct {
+typedef struct RenderBuffer {
     i32 max;                // max number of vertices stored in the Buffer
     i32 storedPerShape;     // number of vertices stored per shape
     i32 renderedPerShape;   // number of vertices rendered per shape
@@ -329,6 +336,7 @@ RenderBuffer connectedLines;       // Default dynamic buffer for connnected line
 RenderBuffer triangles;            // Default dynamic buffer for triangles data
 RenderBuffer quads;                // Default dynamic buffer for quads data (used to draw textures)
 
+Atlas* currentAtlas;
 Shader currentShader;
 RenderBuffer* currentRenderBuffer;
 Color currentColor;
@@ -422,6 +430,98 @@ static void Log(LogLevel msgType, const char *text, ...) {
     if (msgType == ERROR) exit(1);
 }
 
+static void AtlasLoad(Atlas* atlas) {
+    atlas = (Atlas*) malloc((sizeof *atlas) + sizeof(Color));
+    atlas->id = 0;
+    atlas->mipmaps = 0;
+    atlas->width = 1;
+    atlas->height = 1;
+    atlas->nextX = 1;
+    atlas->nextY = 1;
+    atlas->pixels[0] = (Color){ 255, 255, 255, 255 };
+
+    glGenTextures(1, &atlas->id);
+
+    glBindTexture(GL_TEXTURE_2D, atlas->id);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, atlas->width, atlas->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, atlas->pixels);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);       // Set texture to repeat on x-axis
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);       // Set texture to repeat on y-axis
+
+    // Magnification and minification filters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+static const char* GetExtension(const char* fileName) {
+
+    const char* cur = fileName;
+    while (cur++ != '\0') {}
+    if (cur - fileName < 3) { return "bad"; }
+    cur -= 3;
+    return cur;
+}
+
+static b32 strcmp(const char* a, const char * b) {
+    while (true) {
+        if (*a != *b) { return *a < *b; }
+        if (*a == '\0') { return 0; }
+
+        a++;
+        b++;
+    }
+}
+
+static Texture LoadTexture(const char* fileName, Atlas* atlas) {
+
+    Texture result = {0};
+
+    if (!(strcmp(GetExtension(fileName), "png") == 0) ||
+        (strcmp(GetExtension(fileName), "bmp") == 0) ||
+        (strcmp(GetExtension(fileName), "tga") == 0) ||
+        (strcmp(GetExtension(fileName), "jpg") == 0))
+    {
+        return result;
+    }
+
+    i32 width = 0;
+    i32 height = 0;
+    i32 bytesPerPixel = 0;
+    i32 format = 0;
+
+    // NOTE: Using stb_image to load images (Supports: BMP, TGA, PNG, JPG)
+    void* data = stbi_load(fileName, &width, &height, &bytesPerPixel, 0);
+
+    if (bytesPerPixel == 1) format = UNCOMPRESSED_GRAYSCALE;
+    else if (bytesPerPixel == 2) format = UNCOMPRESSED_GRAY_ALPHA;
+    else if (bytesPerPixel == 3) format = UNCOMPRESSED_R8G8B8;
+    else if (bytesPerPixel == 4) format = UNCOMPRESSED_R8G8B8A8;
+    assert(format == UNCOMPRESSED_R8G8B8A8); // only one supported currently
+
+    u32 requiredPixels = atlas->nextX * atlas->nextY + width * height;
+
+    // TODO(vdka): Allocate in powers of 2
+
+    atlas = realloc(atlas, (sizeof *atlas) + (sizeof *atlas->pixels) * requiredPixels);
+
+
+    result.topLeft.x = atlas->nextX;
+    result.topLeft.y = atlas->nextY;
+    result.bottomRight.x = atlas->nextX + width;
+    result.bottomRight.y = atlas->nextY + height;
+
+    atlas->nextX += width;
+    if (atlas->nextX > 512) {
+        atlas->nextX = 0;
+        atlas->nextY += height;
+    }
+
+    return result;
+}
+
 // converts window coordinates into 'world' coordinates
 // TODO(vdka): Currently ignores camera position (assumes 0, 0)
 static V2 WindowToWorld(V2 point) {
@@ -511,7 +611,6 @@ static void ScrollCallback(GLFWwindow *window, f64 xoffset, f64 yoffset) {
     currentMouseWheelY = (i32) yoffset;
 }
 
-
 static i32 CreateTexture(void *data, i32 width, i32 height, TextureFormat format, i32 mipmapCount) {
     glBindTexture(GL_TEXTURE_2D, 0); // free past binding
 
@@ -585,8 +684,8 @@ static void InitBuffer(i32 stored, i32 rendered, i32 mode, i32 maxVerts, RenderB
 
     buffer->mode = mode;
 
-    buffer->vertices = (V2*) malloc(sizeof(V2) * maxVerts);
-    buffer->colors   = (Color*) malloc(sizeof(Color) * maxVerts);
+    buffer->vertices = (V2*) malloc((sizeof *buffer->vertices) * maxVerts);
+    buffer->colors   = (Color*) malloc((sizeof *buffer->colors) * maxVerts);
     buffer->indices  = NULL;
 
     glGenVertexArrays(1, &buffer->vao);
@@ -595,14 +694,14 @@ static void InitBuffer(i32 stored, i32 rendered, i32 mode, i32 maxVerts, RenderB
     // Vertex position buffer (shader-location = 0)
     glGenBuffers(1, &buffer->vbo[0]);
     glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(V2) * maxVerts, buffer->vertices, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer->vertices) * maxVerts, buffer->vertices, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(currentShader.positionLoc);
     glVertexAttribPointer(currentShader.positionLoc, 2, GL_FLOAT, false, 0, NULL);
 
     // Vertex color buffer (shader-location = 3)
     glGenBuffers(1, &buffer->vbo[1]);
     glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Color) * maxVerts, buffer->colors, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer->colors) * maxVerts, buffer->colors, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(currentShader.colorLoc);
     glVertexAttribPointer(currentShader.colorLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
 
@@ -620,7 +719,7 @@ static void LoadDefaultBuffers() {
     InitBuffer(3, 3, GL_TRIANGLES, 2048 * 3, &triangles);
     InitBuffer(4, 6, GL_TRIANGLES, 2048 * 4, &quads);
 
-    quads.indices = (u32*) malloc(sizeof(u32) * 1024 * 6);
+    quads.indices = (u32*) malloc((sizeof quads.indices) * 1024 * 6);
     for (int i = 0, k = 0; i < 1024 * 6; i += 6, k++) {
         quads.indices[i]     = 4 * k;
         quads.indices[i + 1] = 4 * k + 1;
@@ -632,7 +731,7 @@ static void LoadDefaultBuffers() {
 
     glGenBuffers(1, &quads.vbo[2]);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quads.vbo[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u32) * 1024 * 6, quads.indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (sizeof quads.indices) * 1024 * 6, quads.indices, GL_STATIC_DRAW);
 
     free(quads.indices); // we can free these from CPU now they are on the GPU
 }
@@ -648,11 +747,11 @@ static void UpdateBuffer(RenderBuffer* buffer) {
 
         // vertex positions buffer
         glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[0]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(V2) * buffer->count, buffer->vertices);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (sizeof *buffer->vertices) * buffer->count, buffer->vertices);
 
         // colors buffer
         glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[1]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Color) * buffer->count, buffer->colors);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (sizeof *buffer->colors) * buffer->count, buffer->colors);
 
         // Unbind the current VAO
         glBindVertexArray(0);
@@ -696,40 +795,6 @@ static void DrawDefaultBuffers() {
     DrawBuffer(&connectedLines);
     DrawBuffer(&triangles);
     DrawBuffer(&quads);
-}
-
-static u32 LoadTexture(void *data, i32 width, i32 height, TextureFormat textureFormat, i32 mipmapCount) {
-    glBindTexture(GL_TEXTURE_2D, 0);    // Free any old binding
-
-    u32 id = 0;
-
-    glGenTextures(1, &id);              // Generate Pointer to the texture
-
-    glBindTexture(GL_TEXTURE_2D, id);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);       // Set texture to repeat on x-axis
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);       // Set texture to repeat on y-axis
-
-    // Magnification and minification filters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
-
-    if (mipmapCount > 1) {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);   // Activate Trilinear filtering for mipmaps (must be available)
-    }
-
-    // At this point we have the texture loaded in GPU and texture parameters configured
-
-    // NOTE: If mipmaps were not in data, they are not generated automatically
-
-    // Unbind current texture
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    if (id > 0) Log(INFO, "[TEX ID %i] Texture created successfully (%ix%i)", id, width, height);
-    else Log(WARNING, "Texture could not be created");
-
-    return id;
 }
 
 static void InitGraphicsDevice(i32 width, i32 height, const char* title) {
@@ -836,9 +901,7 @@ static void InitGraphicsDevice(i32 width, i32 height, const char* title) {
 
     LoadDefaultBuffers();
 
-    u8 pixels[4] = { 255, 255, 255, 255 };
-
-    whiteTexture = LoadTexture(pixels, 1, 1, UNCOMPRESSED_R8G8B8A8, 1);
+    AtlasLoad(currentAtlas);
 
     if (whiteTexture != 0) Log(INFO, "[TEX ID %i] Base white texture loaded successfully", whiteTexture);
     else Log(WARNING, "Base white texture could not be loaded");
@@ -921,7 +984,7 @@ DEF b32 WindowShouldClose(void) {
 
 API b32 IsWindowMinimized(void);
 
-API V2 GetWindowDimentions(void) {
+DEF V2 GetWindowDimentions(void) {
     i32 w, h;
     glfwGetWindowSize(window, &w, &h);
 
@@ -930,9 +993,38 @@ API V2 GetWindowDimentions(void) {
 
 API void ToggleFullscreen(void);
 
+DEF b32 IsMouseButtonPressed(i32 button) {
+    if ((currentMouseState[button] != previousMouseState[button]) && (currentMouseState[button] == 1)) return true;
+    else return false;
+}
+
+DEF b32 IsMouseButtonDown(i32 button) {
+    if (GetMouseButtonStatus(button) == 1) return true;
+    else return false;
+}
+
+DEF b32 IsMouseButtonReleased(i32 button) {
+    if ((currentMouseState[button] != previousMouseState[button]) && (currentMouseState[button] == 0)) return true;
+    else return false;
+}
+
+DEF b32 IsMouseButtonUp(i32 button) {
+    if (GetMouseButtonStatus(button) == 0) return true;
+    else return false;
+}
+
 DEF V2 GetMousePosition(void) {
 
     return WindowToWorld(mousePosition);
+}
+
+DEF void SetMousePosition(V2 position) {
+    mousePosition = position;
+    glfwSetCursorPos(window, position.x, position.y);
+}
+
+DEF i32 GetMouseWheelMove(void) {
+    return previousMouseWheelY;
 }
 
 DEF b32 IsKeyPressed(i32 key) {
@@ -1037,11 +1129,21 @@ DEF void SetLineWidth(f32 width) {
     glLineWidth(width);
 }
 
-API void DrawPoint(f32 x, f32 y, Color color) {
+DEF void DrawPoint(f32 x, f32 y, Color color) {
     setBuffer(&pixels);
     setColor(color);
     {
         vertex(x, y);
+    }
+    setBuffer(NULL);
+}
+
+DEF void DrawLine(f32 x1, f32 y1, f32 x2, f32 y2, Color color) {
+    setBuffer(&lines);
+    setColor(color);
+    {
+        vertex(x1, y1);
+        vertex(x2, y2);
     }
     setBuffer(NULL);
 }
@@ -1189,5 +1291,5 @@ DEF void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
     setBuffer(NULL);
 }
 
-#endif
-#endif // TD2D_h
+#endif // defined(MUSE2D_IMPLEMENTATION) && !defined(MUSE2D_IMPLEMENTATION_DONE)
+#endif // MUSE2D_H
