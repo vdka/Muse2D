@@ -1,6 +1,6 @@
 
-#ifndef  MUSE2D_H
-#define MUSE2D_H
+#ifndef MUSE_H
+#define MUSE_H
 
 #include <stdio.h>
 #include <stdint.h>
@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 
@@ -101,12 +102,6 @@ typedef struct Rect {
     f32 x, y, width, height;
 } Rect;
 
-// NOTE: Data stored in GPU memory
-typedef struct Texture {
-    V2  topLeft;            // the topleft coordinate of the texture in the atlas
-    V2  bottomRight;        // the bottomright coordinate of the texture in the atlas
-} Texture;
-
 // Quaternion type
 typedef struct Quaternion {
     f32 x, y, z, w;
@@ -177,7 +172,7 @@ API b32  IsMouseButtonUp(i32 button);                                           
 API i32  GetMouseX(void);                                                           // Returns mouse position X
 API i32  GetMouseY(void);                                                           // Returns mouse position Y
 API V2   GetMousePosition(void);                                                    // Returns the current mouse position
-API void SetMousePosition(V2 position);                                        // Set mouse position XY
+API void SetMousePosition(V2 position);                                             // Set mouse position XY
 API i32  GetMouseWheelMove(void);                                                   // Returns mouse wheel movement Y
 
 
@@ -190,29 +185,29 @@ API void SetExitKey(i32 key);                                                   
 
 API void ClearBackground(Color color);                                              // Sets Background Color
 API void BeginFrame(void);                                                          // Setup drawing canvas to start drawing
-API void EndFrame(void);                                                            // End canvas drawing and Swap Buffers (Double Bufferi
+API void EndFrame(void);                                                            // End canvas drawing and Swap Buffers (Double Buffers)
 API f64  GetTime(void);                                                             // Returns the time since InitTimer() was cal
+
+API u32  TextureLoad(const char* fileName);                                         // Loads a texture from a file and returns a handle
 
 API void SetLineWidth(f32 width);                                                   // Set the width of the lines drawn
 
 API void DrawPoint(f32 x, f32 y, Color color);                                      // Draw a single 'point'
 
 API void DrawLine(f32 x1, f32 y1, f32 x2, f32 y2, Color color);                     // Draw a line between 2 points
-
 API void DrawTri(V2 v1, V2 v2, V2 v3, Color color);                                 // Draw a Triangle outline
 API void FillTri(V2 v1, V2 v2, V2 v3, Color color);                                 // Fill a Triangle
-
 API void DrawRect(Rect rect, Color color);                                          // Draw a Rectangle outline
 API void FillRect(Rect rect, Color color);                                          // Fill a Rectangle
-
 API void FillPoly(V2 center, i32 sides, f32 radius, Color color);
 API void FillCircle(V2 center, f32 radius, Color color);
 
 API void DrawTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color);                    // Draw a Triangle outline
 API void FillTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color);                    // Fill a Triangle
-
 API void DrawRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Draw a Rectangle outline
 API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Fill a Rectangle
+
+API void DrawTexture(u32 id, Rect rect);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -230,8 +225,8 @@ API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
 /*                                                                         */
 /***************************************************************************/
 
-#if defined(MUSE2D_IMPLEMENTATION) && !defined(MUSE2D_IMPLEMENTATION_DONE)
-#define MUSE2D_IMPLEMENTATION_DONE
+#if defined(MUSE_IMPLEMENTATION) && !defined(MUSE_IMPLEMENTATION_DONE)
+#define MUSE_IMPLEMENTATION_DONE
 
 // Include GLEW first; It's magic
 #include <glad/glad.h>
@@ -240,6 +235,7 @@ API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
 #undef GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 /**GLOBALS********************************************************/
@@ -298,43 +294,58 @@ typedef struct Shader {
     i32 positionLoc;
     i32 texcoordLoc;
     i32 colorLoc;
+    i32 textureLoc;
 
     i32 cameraLoc;
 } Shader;
 
+#define ATLAS_SIZE 64
 typedef struct Atlas {
-    u32 id;         // the OpenGL Texture id
-    u32 width;      // the total width of the atlas texture
-    u32 height;     // the total height of the atlas texture
-    i32 mipmaps;    // the number of mipmaps
-    u32 nextX;      // the next X coordinate to put something into
-    u32 nextY;      // the next Y coordinate to put something into
+    u32   id;           // the OpenGL Texture id
+    u32   width;        // the total width of the atlas texture
+    u32   height;       // the total height of the atlas texture
+    u32   mipmaps;      // the number of mipmaps
+    u32   curX;         // the x coord that represents the position to put the start of the next texture
+    u32   curY;         // the y coord that represents the position to put the start of the next texture
+    u32   maxY;         // the larget (heightwise) object in the current row
+    u32   count;        // the number of textures stored in the atlas
+    f32*  texcoords;    // an array of texturePositions
     Color pixels[];
 } Atlas;
 
 // typically (GL_POINTS | GL_LINES | GL_LINE_LOOP | GL_TRIANGLES | GL_TRIANGLE_STRIP)
 // Buffers used for storing vertices from Draw & Fill calls before unloading to GPU
 typedef struct RenderBuffer {
-    i32 max;                // max number of vertices stored in the Buffer
-    i32 storedPerShape;     // number of vertices stored per shape
-    i32 renderedPerShape;   // number of vertices rendered per shape
+    i32 max : 30;           // max number of vertices stored in the Buffer
+    b32 isQuad : 1;         // to use indices or not to use indices
+    b32 isTextured : 1;     // is this to be textured?
     i32 count;              // number of vertices in the buffer
 
-    // TODO(vdka): we will need more once we support textures
-    V2* vertices;           // vertex position
-    Color* colors;          // vertex colors (RGBA - 4 components per vertex)
-    u32 *indices;           // vertex indices (in case vertex data comes indexed) (6 indices per quad)
+    i32 storedPerShape;     // number of vertices stored per shape
+    i32 renderedPerShape;   // number of vertices rendered per shape
+
+    V2*    vertices;        // vertex position
+    Color* colors;          // vertex colors (RGBA - 5 components per vertex)
+    V2*    texcoords;
 
     i32 mode;               // The draw mode to use for OpenGL
     u32 vao;                // OpenGL Vertex Array Object
-    u32 vbo[3];             // OpenGL Vertex Buffer Object (1 for color, 1 for positions, 1 for indices)
+    u32 vbo[3];             // OpenGL Vertex Buffer Object (1 for color, 1 for positions, 1 for texcoords)
 } RenderBuffer;
 
-RenderBuffer pixels;               // Default dynamic buffer for pixel data
-RenderBuffer lines;                // Default dynamic buffer for lines data
-RenderBuffer connectedLines;       // Default dynamic buffer for connnected lines data
-RenderBuffer triangles;            // Default dynamic buffer for triangles data
-RenderBuffer quads;                // Default dynamic buffer for quads data (used to draw textures)
+u32 quadIndicesVBO;
+u32 whiteTexture;
+
+#define VBO_POSITION  0
+#define VBO_COLOR     1
+#define VBO_TEXCOORD  2
+
+RenderBuffer pixels;                // Default dynamic buffer for pixel data
+RenderBuffer lines;                 // Default dynamic buffer for lines data
+RenderBuffer connectedLines;        // Default dynamic buffer for connnected lines data
+RenderBuffer triangles;             // Default dynamic buffer for triangles data
+RenderBuffer quads;                 // Default dynamic buffer for quads data (used to draw textures)
+RenderBuffer texturedQuads;         // Default buffer for drawing textured quads from
 
 Atlas* currentAtlas;
 Shader currentShader;
@@ -344,8 +355,6 @@ Camera currentCamera;
 
 f32 minLineWidth;
 f32 maxLineWidth;
-
-u32 whiteTexture;
 
 /**SHADERS*******************************************************************/
 /*                                                                          */
@@ -362,33 +371,35 @@ u32 whiteTexture;
 #define GLSL(src) "#version 400 core\n" #src
 
 const char* vertexShaderSource = GLSL(
-    in vec2 vertexPosition;
-    in vec2 vertexTexCoord;
-    in vec4 vertexColor;
-    out vec2 fragTexCoord;
-    out vec4 fragColor;
+    in vec2 vPosition;
+    in vec2 vTexcoord;
+    in vec4 vColor;
+    out vec2 fTexcoord;
+    out vec4 fColor;
 
     uniform vec4 camera;
 
     void main() {
-        fragTexCoord = vertexTexCoord;
-        fragColor = vertexColor;
+        fTexcoord = vTexcoord;
+        fColor = vColor;
 
-        vec2 camPos = vec2(-camera.x + vertexPosition.x, -camera.y + vertexPosition.y);
+        vec2 camPos = vec2(-camera.x + vPosition.x, -camera.y + vPosition.y);
         vec2 renPos = vec2(camPos.x * 2 / camera.z, camPos.y * 2 / camera.w);
         gl_Position = vec4(renPos, 0.0, 1.0);
     }
 );
 
 const char* fragmentShaderSource = GLSL(
-    in vec2 fragTexCoord;
-    in vec4 fragColor;
-    out vec4 finalColor;
+    in vec2 fTexcoord;
+    in vec4 fColor;
+    out vec4 outputColor;
 
-    uniform sampler2D texture0;
+    uniform sampler2D tex;
 
     void main() {
-        finalColor = fragColor;
+        vec4 texelColor = texture(tex, fTexcoord);
+        outputColor = texelColor * fColor;
+        // finalColor = fragColor;
     }
 );
 
@@ -430,21 +441,29 @@ static void Log(LogLevel msgType, const char *text, ...) {
     if (msgType == ERROR) exit(1);
 }
 
-static void AtlasLoad(Atlas* atlas) {
-    atlas = (Atlas*) malloc((sizeof *atlas) + sizeof(Color));
+static Atlas* AtlasCreate() {
+
+    Atlas* atlas = (Atlas*) malloc((sizeof *atlas) + ATLAS_SIZE * ATLAS_SIZE * sizeof(Color));
+    memset(atlas->pixels, 0, ATLAS_SIZE * ATLAS_SIZE * sizeof(Color));
     atlas->id = 0;
-    atlas->mipmaps = 0;
-    atlas->width = 1;
-    atlas->height = 1;
-    atlas->nextX = 1;
-    atlas->nextY = 1;
-    atlas->pixels[0] = (Color){ 255, 255, 255, 255 };
+    atlas->mipmaps = 1;
+    atlas->width = ATLAS_SIZE;
+    atlas->height = ATLAS_SIZE;
+    atlas->curX = 0;
+    atlas->curY = ATLAS_SIZE;
+    atlas->maxY = 0;
+
+    atlas->count = 0;
+    atlas->texcoords = malloc(4 * (sizeof *atlas->texcoords)); // 4 texcoords, 2 for each corner
 
     glGenTextures(1, &atlas->id);
 
+    // This is the only place where we bind a texture ever.
+    glActiveTexture(GL_TEXTURE0 + atlas->id);
     glBindTexture(GL_TEXTURE_2D, atlas->id);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, atlas->width, atlas->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, atlas->pixels);
+    glUniform1i(currentShader.textureLoc, atlas->id);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);       // Set texture to repeat on x-axis
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);       // Set texture to repeat on y-axis
@@ -453,38 +472,24 @@ static void AtlasLoad(Atlas* atlas) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);  // Alternative: GL_LINEAR
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    return atlas;
 }
 
-static const char* GetExtension(const char* fileName) {
-
-    const char* cur = fileName;
-    while (cur++ != '\0') {}
-    if (cur - fileName < 3) { return "bad"; }
-    cur -= 3;
-    return cur;
+static const char* GetExtension(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
 }
 
-static b32 strcmp(const char* a, const char * b) {
-    while (true) {
-        if (*a != *b) { return *a < *b; }
-        if (*a == '\0') { return 0; }
+static u32 AtlasLoadTexture(const char* fileName) {
 
-        a++;
-        b++;
-    }
-}
-
-static Texture LoadTexture(const char* fileName, Atlas* atlas) {
-
-    Texture result = {0};
-
+    // NOTE: Do I need to check or will stbi_load fail gracefully?
     if (!(strcmp(GetExtension(fileName), "png") == 0) ||
         (strcmp(GetExtension(fileName), "bmp") == 0) ||
         (strcmp(GetExtension(fileName), "tga") == 0) ||
         (strcmp(GetExtension(fileName), "jpg") == 0))
     {
-        return result;
+        return 0;
     }
 
     i32 width = 0;
@@ -493,7 +498,7 @@ static Texture LoadTexture(const char* fileName, Atlas* atlas) {
     i32 format = 0;
 
     // NOTE: Using stb_image to load images (Supports: BMP, TGA, PNG, JPG)
-    void* data = stbi_load(fileName, &width, &height, &bytesPerPixel, 0);
+    u8* data = stbi_load(fileName, &width, &height, &bytesPerPixel, 0);
 
     if (bytesPerPixel == 1) format = UNCOMPRESSED_GRAYSCALE;
     else if (bytesPerPixel == 2) format = UNCOMPRESSED_GRAY_ALPHA;
@@ -501,29 +506,39 @@ static Texture LoadTexture(const char* fileName, Atlas* atlas) {
     else if (bytesPerPixel == 4) format = UNCOMPRESSED_R8G8B8A8;
     assert(format == UNCOMPRESSED_R8G8B8A8); // only one supported currently
 
-    u32 requiredPixels = atlas->nextX * atlas->nextY + width * height;
+    currentAtlas->texcoords = realloc(currentAtlas->texcoords, (currentAtlas->count + 1) * 4 * (sizeof *currentAtlas->texcoords));
 
-    // TODO(vdka): Allocate in powers of 2
-
-    atlas = realloc(atlas, (sizeof *atlas) + (sizeof *atlas->pixels) * requiredPixels);
-
-
-    result.topLeft.x = atlas->nextX;
-    result.topLeft.y = atlas->nextY;
-    result.bottomRight.x = atlas->nextX + width;
-    result.bottomRight.y = atlas->nextY + height;
-
-    atlas->nextX += width;
-    if (atlas->nextX > 512) {
-        atlas->nextX = 0;
-        atlas->nextY += height;
+    if (currentAtlas->curX + width >= currentAtlas->width) {
+        currentAtlas->curX = 0;
+        currentAtlas->curY -= currentAtlas->maxY;
+        currentAtlas->maxY = 0;
     }
 
-    return result;
+    for (u32 y = 0; y < height; y++) {
+
+        u32 srcIndex = (y * 4) * width;
+        u32 dstIndex = (currentAtlas->curY * ATLAS_SIZE) - ATLAS_SIZE + currentAtlas->curX - y * currentAtlas->width;
+
+        assert(dstIndex != 0);
+
+        memcpy(&currentAtlas->pixels[dstIndex], &data[srcIndex], sizeof(Color) * width);
+    }
+
+    currentAtlas->texcoords[currentAtlas->count * 4]     = (f32) currentAtlas->curX / (f32) ATLAS_SIZE;
+    currentAtlas->texcoords[currentAtlas->count * 4 + 3] = (f32) (currentAtlas->curY - height) / (f32) ATLAS_SIZE;
+    currentAtlas->texcoords[currentAtlas->count * 4 + 2] = (f32) (currentAtlas->curX + width) / (f32) ATLAS_SIZE;
+    currentAtlas->texcoords[currentAtlas->count * 4 + 1] = (f32) currentAtlas->curY / (f32) ATLAS_SIZE;
+
+    currentAtlas->curX += width;
+    currentAtlas->maxY = currentAtlas->maxY > height ? currentAtlas->maxY : height;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, currentAtlas->width, currentAtlas->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, currentAtlas->pixels);
+
+    free(data);
+
+    return currentAtlas->count++;
 }
 
-// converts window coordinates into 'world' coordinates
-// TODO(vdka): Currently ignores camera position (assumes 0, 0)
 static V2 WindowToWorld(V2 point) {
     V2 windowSize = GetWindowDimentions();
     f64 vertScale = currentCamera.target.width / windowSize.x;
@@ -579,10 +594,10 @@ static void PollInputEvents(void) {
     // Keyboard input polling (automatically managed by GLFW3 through callback)
 
     // Register previous keys states
-    for (int i = 0; i < 512; i++) previousKeyState[i] = currentKeyState[i];
+    for (int i = 0; i < GLFW_KEY_LAST; i++) previousKeyState[i] = currentKeyState[i];
 
     // Register previous mouse states
-    for (int i = 0; i < 3; i++) previousMouseState[i] = currentMouseState[i];
+    for (int i = 0; i < GLFW_MOUSE_BUTTON_LAST; i++) previousMouseState[i] = currentMouseState[i];
 
     previousMouseWheelY = currentMouseWheelY;
     currentMouseWheelY = 0;
@@ -609,22 +624,6 @@ static void MouseButtonCallback(GLFWwindow *window, i32 button, i32 action, i32 
 
 static void ScrollCallback(GLFWwindow *window, f64 xoffset, f64 yoffset) {
     currentMouseWheelY = (i32) yoffset;
-}
-
-static i32 CreateTexture(void *data, i32 width, i32 height, TextureFormat format, i32 mipmapCount) {
-    glBindTexture(GL_TEXTURE_2D, 0); // free past binding
-
-    u32 id = 0;
-
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-
-    switch (format) {
-        case UNCOMPRESSED_R8G8B8A8: glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (u8*) data); break;
-        default: Log(WARNING, "Texture format not recognized");
-    }
-
-    return id;
 }
 
 static u32 LoadShader(u32 type, const char* source) {
@@ -676,105 +675,134 @@ static u32 CreateShaderProgram(u32 vert, u32 frag) {
     return program;
 }
 
-static void InitBuffer(i32 stored, i32 rendered, i32 mode, i32 maxVerts, RenderBuffer* buffer) {
-    buffer->max = maxVerts;
-    buffer->storedPerShape = stored;
-    buffer->renderedPerShape = rendered;
-    buffer->count = 0;
+static RenderBuffer BufferCreate(i32 stored, i32 rendered, i32 mode, i32 maxVerts, b32 isQuad, b32 isTextured) {
+    RenderBuffer buffer = {0};
+    buffer.max = maxVerts;
+    buffer.storedPerShape = stored;
+    buffer.renderedPerShape = rendered;
+    buffer.count = 0;
 
-    buffer->mode = mode;
+    buffer.mode = mode;
 
-    buffer->vertices = (V2*) malloc((sizeof *buffer->vertices) * maxVerts);
-    buffer->colors   = (Color*) malloc((sizeof *buffer->colors) * maxVerts);
-    buffer->indices  = NULL;
+    buffer.isQuad     = isQuad;
+    buffer.isTextured = isTextured;
 
-    glGenVertexArrays(1, &buffer->vao);
-    glBindVertexArray(buffer->vao);
+    buffer.vertices = (V2*) malloc((sizeof *buffer.vertices) * maxVerts);
+    buffer.texcoords = (V2*) malloc((sizeof *buffer.texcoords) * maxVerts);
+    buffer.colors   = (Color*) malloc((sizeof *buffer.colors) * maxVerts);
 
-    // Vertex position buffer (shader-location = 0)
-    glGenBuffers(1, &buffer->vbo[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer->vertices) * maxVerts, buffer->vertices, GL_DYNAMIC_DRAW);
+    for (u32 i = 0; i < ATLAS_SIZE; i++)
+        buffer.texcoords[i] = i % 2 == 0 ?
+            (V2){0, 0} :
+            (V2){1.f / ATLAS_SIZE, 1.f / ATLAS_SIZE};
+
+    glGenVertexArrays(1, &buffer.vao);
+    glBindVertexArray(buffer.vao);
+
+    glGenBuffers(1, &buffer.vbo[VBO_POSITION]);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer.vbo[VBO_POSITION]);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer.vertices) * maxVerts, buffer.vertices, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(currentShader.positionLoc);
     glVertexAttribPointer(currentShader.positionLoc, 2, GL_FLOAT, false, 0, NULL);
 
-    // Vertex color buffer (shader-location = 3)
-    glGenBuffers(1, &buffer->vbo[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer->colors) * maxVerts, buffer->colors, GL_DYNAMIC_DRAW);
+    glGenBuffers(1, &buffer.vbo[VBO_COLOR]);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer.vbo[VBO_COLOR]);
+    glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer.colors) * maxVerts, buffer.colors, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(currentShader.colorLoc);
     glVertexAttribPointer(currentShader.colorLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, NULL);
 
+    if (isTextured) {
+        glGenBuffers(1, &buffer.vbo[VBO_TEXCOORD]);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer.vbo[VBO_TEXCOORD]);
+        glBufferData(GL_ARRAY_BUFFER, (sizeof *buffer.texcoords) * maxVerts, buffer.texcoords, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(currentShader.texcoordLoc, 2, GL_FLOAT, false, 0, NULL);
+        glEnableVertexAttribArray(currentShader.texcoordLoc);
+    }
+
     // unbind the vertex array
     glBindVertexArray(0);
+    return buffer;
 }
 
-static void LoadDefaultBuffers() {
+static void BufferDefaultsCreate() {
 
     // TODO(vdka): Allow macro's to define the buffer sizes
 
-    InitBuffer(1, 1, GL_POINT,     2048, &pixels);
-    InitBuffer(2, 2, GL_LINES,     4096, &lines);
-    InitBuffer(2, 2, GL_LINE_LOOP, 4096, &connectedLines);
-    InitBuffer(3, 3, GL_TRIANGLES, 2048 * 3, &triangles);
-    InitBuffer(4, 6, GL_TRIANGLES, 2048 * 4, &quads);
+    pixels         = BufferCreate(1, 1, GL_POINT,     2048,     false, false);
+    lines          = BufferCreate(2, 2, GL_LINES,     4096,     false, false);
+    connectedLines = BufferCreate(2, 2, GL_LINE_LOOP, 4096,     false, false);
+    triangles      = BufferCreate(3, 3, GL_TRIANGLES, 2048 * 3, false, false);
+    quads          = BufferCreate(4, 6, GL_TRIANGLES, 2048 * 4, true,  false);
+    texturedQuads  = BufferCreate(4, 6, GL_TRIANGLES, 2048 * 4, true,  true);
 
-    quads.indices = (u32*) malloc((sizeof quads.indices) * 1024 * 6);
+    u32* indices = (u32*) malloc(sizeof(u32) * 1024 * 6);
     for (int i = 0, k = 0; i < 1024 * 6; i += 6, k++) {
-        quads.indices[i]     = 4 * k;
-        quads.indices[i + 1] = 4 * k + 1;
-        quads.indices[i + 2] = 4 * k + 2;
-        quads.indices[i + 3] = 4 * k;
-        quads.indices[i + 4] = 4 * k + 2;
-        quads.indices[i + 5] = 4 * k + 3;
+        indices[i]     = 4 * k;
+        indices[i + 1] = 4 * k + 1;
+        indices[i + 2] = 4 * k + 2;
+        indices[i + 3] = 4 * k;
+        indices[i + 4] = 4 * k + 2;
+        indices[i + 5] = 4 * k + 3;
     }
 
-    glGenBuffers(1, &quads.vbo[2]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quads.vbo[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (sizeof quads.indices) * 1024 * 6, quads.indices, GL_STATIC_DRAW);
+    glGenBuffers(1, &quadIndicesVBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIndicesVBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (sizeof *indices) * 1024 * 6, indices, GL_STATIC_DRAW);
 
-    free(quads.indices); // we can free these from CPU now they are on the GPU
+    free(indices); // we can free these from CPU now they are on the GPU
 }
 
 // Update default internal buffers (VBOs) with vertex array data
 // NOTE: If there is not vertex data, buffers doesn't need to be updated (vertexCount > 0)
 // TODO: If no data changed on the CPU arrays --> No need to re-update GPU arrays (change flag required)
-static void UpdateBuffer(RenderBuffer* buffer) {
+static void BufferUpdate(RenderBuffer* buffer) {
 
     // Update lines vertex buffers
     if (buffer->count > 0) {
         glBindVertexArray(buffer->vao);
 
         // vertex positions buffer
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[0]);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[VBO_POSITION]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, (sizeof *buffer->vertices) * buffer->count, buffer->vertices);
 
         // colors buffer
-        glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[1]);
+        glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[VBO_COLOR]);
         glBufferSubData(GL_ARRAY_BUFFER, 0, (sizeof *buffer->colors) * buffer->count, buffer->colors);
+
+        // texcoords buffer
+        if (buffer->isTextured) {
+            glBindBuffer(GL_ARRAY_BUFFER, buffer->vbo[VBO_TEXCOORD]);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, (sizeof *buffer->texcoords) * buffer->count, buffer->texcoords);
+        }
 
         // Unbind the current VAO
         glBindVertexArray(0);
     }
 }
 
-static void UpdateDefaultBuffers() {
-    UpdateBuffer(&pixels);
-    UpdateBuffer(&lines);
-    UpdateBuffer(&connectedLines);
-    UpdateBuffer(&triangles);
-    UpdateBuffer(&quads);
+static void BufferUpdateDefaults() {
+    BufferUpdate(&pixels);
+    BufferUpdate(&lines);
+    BufferUpdate(&connectedLines);
+    BufferUpdate(&triangles);
+    BufferUpdate(&quads);
+    BufferUpdate(&texturedQuads);
 }
 
-static void DrawBuffer(RenderBuffer* buffer) {
+static void BufferDraw(RenderBuffer* buffer) {
 
     if (buffer->count > 0) {
-        glBindTexture(GL_TEXTURE_2D, whiteTexture);
 
         glBindVertexArray(buffer->vao);
 
-        if (buffer->indices != NULL) {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer->vbo[2]);
+        if (buffer->isTextured) {
+            glBindTexture(GL_TEXTURE_2D, currentAtlas->id);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, whiteTexture);
+        }
+
+        if (buffer->isQuad) {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIndicesVBO);
             glDrawElements(buffer->mode, buffer->renderedPerShape * buffer->count / buffer->storedPerShape, GL_UNSIGNED_INT, 0);
         } else {
             glDrawArrays(buffer->mode, 0, buffer->count);
@@ -784,17 +812,17 @@ static void DrawBuffer(RenderBuffer* buffer) {
         buffer->count = 0;
 
         // unbind
-        glBindTexture(GL_TEXTURE_2D, 0);
         glBindVertexArray(0);
     }
 }
 
-static void DrawDefaultBuffers() {
-    DrawBuffer(&pixels);
-    DrawBuffer(&lines);
-    DrawBuffer(&connectedLines);
-    DrawBuffer(&triangles);
-    DrawBuffer(&quads);
+static void BufferDrawDefaults() {
+    BufferDraw(&pixels);
+    BufferDraw(&lines);
+    BufferDraw(&connectedLines);
+    BufferDraw(&triangles);
+    BufferDraw(&quads);
+    BufferDraw(&texturedQuads);
 }
 
 static void InitGraphicsDevice(i32 width, i32 height, const char* title) {
@@ -827,7 +855,6 @@ static void InitGraphicsDevice(i32 width, i32 height, const char* title) {
 
     if (screenWidth <= 0) screenWidth = displayWidth;
     if (screenHeight <= 0) screenHeight = displayHeight;
-
 
     window = glfwCreateWindow(width, height, title, NULL, NULL);
 
@@ -892,19 +919,29 @@ static void InitGraphicsDevice(i32 width, i32 height, const char* title) {
     // u32 geometryShader = LoadShader(GL_GEOMETRY_SHADER, geometryShaderSource);
 
     currentShader.id = CreateShaderProgram(vertexShader, fragmentShader);
+    glUseProgram(currentShader.id);
 
-    currentShader.positionLoc = glGetAttribLocation(currentShader.id, "vertexPosition");
-    currentShader.texcoordLoc = glGetAttribLocation(currentShader.id, "vertexTexCoord");
-    currentShader.colorLoc    = glGetAttribLocation(currentShader.id, "vertexColor");
+    currentShader.positionLoc = glGetAttribLocation(currentShader.id, "vPosition");
+    currentShader.texcoordLoc = glGetAttribLocation(currentShader.id, "vTexcoord");
+    currentShader.colorLoc    = glGetAttribLocation(currentShader.id, "vColor");
 
+    currentShader.textureLoc  = glGetUniformLocation(currentShader.id, "tex");
     currentShader.cameraLoc   = glGetUniformLocation(currentShader.id, "camera");
 
-    LoadDefaultBuffers();
+    BufferDefaultsCreate();
 
-    AtlasLoad(currentAtlas);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    if (whiteTexture != 0) Log(INFO, "[TEX ID %i] Base white texture loaded successfully", whiteTexture);
-    else Log(WARNING, "Base white texture could not be loaded");
+    u32 pixel = 0xFFFFFFFF;
+    glGenTextures(1, &whiteTexture);
+    glBindTexture(GL_TEXTURE_2D, whiteTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixel);
+
+    currentAtlas = AtlasCreate();
+
+    if (currentAtlas->id == 0) Log(WARNING, "Atlas initialization failed");
+    else Log(INFO, "[TEX ID %i] Atlas texture loaded successfully", currentAtlas->id);
 
     ClearBackground(WHITE);
 }
@@ -921,6 +958,14 @@ static void vertex(f32 x, f32 y) {
     currentRenderBuffer->vertices[currentRenderBuffer->count] = (V2){x, y};
     currentRenderBuffer->colors[currentRenderBuffer->count] = currentColor;
     currentRenderBuffer->count += 1;
+}
+
+// NOTE: Ensure this is called after calling vertex else the count will not be correct and bad memory access may occur
+static void texcoord(f32 x, f32 y) {
+    if (currentRenderBuffer == NULL) Log(ERROR, "Attempt to set texcoord without an active buffer");
+    assert(currentRenderBuffer->count != 0);
+
+    currentRenderBuffer->texcoords[currentRenderBuffer->count - 1] = (V2){x, y};
 }
 
 // TODO(vdka): Determine a prefix
@@ -968,8 +1013,6 @@ DEF void InitWindow(i32 width, i32 height, const char* title) {
     InitGraphicsDevice(width, height, title);
 
     glfwSetInputMode(window, GLFW_STICKY_KEYS, true);
-
-    glUseProgram(currentShader.id);
 }
 
 DEF void CloseWindow(void) {
@@ -1080,8 +1123,8 @@ DEF void BeginFrame(void) {
 }
 
 DEF void EndFrame(void) {
-    UpdateDefaultBuffers();
-    DrawDefaultBuffers();
+    BufferUpdateDefaults();
+    BufferDrawDefaults();
 
     glfwSwapBuffers(window);
     glfwPollEvents();
@@ -1107,6 +1150,10 @@ DEF f64 GetTime(void) {
     return glfwGetTime();
 }
 
+DEF u32 TextureLoad(const char* fileName) {
+    return AtlasLoadTexture(fileName);
+}
+
 DEF void SetLineWidth(f32 width) {
 
     if (minLineWidth > width || maxLineWidth < width) {
@@ -1121,10 +1168,10 @@ DEF void SetLineWidth(f32 width) {
     }
 
     // Render out lines with the current width
-    UpdateBuffer(&lines);
-    UpdateBuffer(&connectedLines);
-    DrawBuffer(&lines);
-    DrawBuffer(&connectedLines);
+    BufferUpdate(&lines);
+    BufferUpdate(&connectedLines);
+    BufferDraw(&lines);
+    BufferDraw(&connectedLines);
 
     glLineWidth(width);
 }
@@ -1157,8 +1204,8 @@ DEF void DrawTri(V2 v1, V2 v2, V2 v3, Color color) {
         vertex(v3.x, v3.y);
     }
     setBuffer(NULL);
-    UpdateBuffer(&connectedLines);
-    DrawBuffer(&connectedLines);
+    BufferUpdate(&connectedLines);
+    BufferDraw(&connectedLines);
 }
 
 DEF void FillTri(V2 v1, V2 v2, V2 v3, Color color) {
@@ -1181,8 +1228,8 @@ DEF void DrawTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color) 
         vertex(x3, y3);
     }
     setBuffer(NULL);
-    UpdateBuffer(&connectedLines);
-    DrawBuffer(&connectedLines);
+    BufferUpdate(&connectedLines);
+    BufferDraw(&connectedLines);
 }
 
 DEF void FillTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color) {
@@ -1210,8 +1257,8 @@ DEF void DrawRect(Rect rect, Color color) {
         vertex(rect.x + halfWidth, rect.y - halfHeight); // tr
     }
     setBuffer(NULL);
-    UpdateBuffer(&connectedLines);
-    DrawBuffer(&connectedLines);
+    BufferUpdate(&connectedLines);
+    BufferDraw(&connectedLines);
 }
 
 DEF void FillRect(Rect rect, Color color) {
@@ -1275,8 +1322,8 @@ DEF void DrawRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
         vertex(x1, y1);
     }
     setBuffer(NULL);
-    UpdateBuffer(&connectedLines);
-    DrawBuffer(&connectedLines);
+    BufferUpdate(&connectedLines);
+    BufferDraw(&connectedLines);
 }
 
 DEF void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color) {
@@ -1291,5 +1338,55 @@ DEF void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
     setBuffer(NULL);
 }
 
-#endif // defined(MUSE2D_IMPLEMENTATION) && !defined(MUSE2D_IMPLEMENTATION_DONE)
-#endif // MUSE2D_H
+DEF void DrawTexture(u32 id, Rect rect) {
+    f32 halfWidth   = rect.width  / 2;
+    f32 halfHeight  = rect.height / 2;
+    f32* coords = &currentAtlas->texcoords[id * 4];
+    V2 textureTopLeft = {coords[0], coords[1]};
+    V2 textureBottomRight = {coords[2], coords[3]};
+    setColor(WHITE);
+    setBuffer(&texturedQuads);
+    {
+        vertex(rect.x - halfWidth, rect.y + halfHeight); // tl
+        texcoord(textureTopLeft.x, textureTopLeft.y);
+
+        vertex(rect.x - halfWidth, rect.y - halfHeight); // bl
+        texcoord(textureTopLeft.x, textureBottomRight.y);
+
+        vertex(rect.x + halfWidth, rect.y - halfHeight); // br
+        texcoord(textureBottomRight.x, textureBottomRight.y);
+
+        vertex(rect.x + halfWidth, rect.y + halfHeight); // tr
+        texcoord(textureBottomRight.x, textureTopLeft.y);
+    }
+    setBuffer(NULL);
+}
+
+DEF void DrawTextureClip(u32 id, Rect destRect, Rect srcRect) {
+    f32 halfDestWidth   = destRect.width  / 2;
+    f32 halfDestHeight  = destRect.height / 2;
+    f32 halfSrcWidth    = srcRect.width  / 2;
+    f32 halfSrcHeight   = srcRect.height / 2;
+    f32* coords = &currentAtlas->texcoords[id * 4];
+    V2 textureTopLeft = {coords[0], coords[1]};
+    V2 textureBottomRight = {coords[2], coords[3]};
+    setColor(WHITE);
+    setBuffer(&texturedQuads);
+    {
+        vertex(destRect.x - halfDestWidth, destRect.y + halfDestHeight); // tl
+        texcoord(textureTopLeft.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureTopLeft.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+
+        vertex(destRect.x - halfDestWidth, destRect.y - halfDestHeight); // bl
+        texcoord(textureTopLeft.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureBottomRight.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+
+        vertex(destRect.x + halfDestWidth, destRect.y - halfDestHeight); // br
+        texcoord(textureBottomRight.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureBottomRight.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+
+        vertex(destRect.x + halfDestWidth, destRect.y + halfDestHeight); // tr
+        texcoord(textureBottomRight.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureTopLeft.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+    }
+    setBuffer(NULL);
+}
+
+#endif // defined(MUSE_IMPLEMENTATION) && !defined(MUSE_IMPLEMENTATION_DONE)
+#endif // MUSE_H

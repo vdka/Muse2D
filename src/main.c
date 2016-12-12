@@ -1,5 +1,5 @@
 
-#define MUSE2D_IMPLEMENTATION
+#define MUSE_IMPLEMENTATION
 #include "muse.h"
 
 inline V2 raycast(V2 rayStart, V2 rayEnd, V2 seg1, V2 seg2) {
@@ -50,6 +50,8 @@ int main() {
 
     setCamera(cam);
 
+    u32 sprite = TextureLoad("data/player-sheet.png");
+
     while (!WindowShouldClose()) {
 
         if (IsKeyDown(GLFW_KEY_D)) cam.target.x += 1 * frameTime;
@@ -82,6 +84,9 @@ int main() {
             FillRect((Rect){ .5, -.5, .25, .25}, BLUE);
 
             FillCircle(mouse, .05, ORANGE);
+
+            DrawTexture(sprite, (Rect){1.f, .6f, .36, .06});
+            DrawTextureClip(sprite, (Rect){-1.f, .6f, .36, .06}, (Rect){3, 3, 6, 6});
             // FillRect((Rect){mouse.x, mouse.y, .5, .5}, (Color){fabs(mouse.x) * 80, fabs(mouse.y) * 100, 0, 1});
         }
         EndFrame();
