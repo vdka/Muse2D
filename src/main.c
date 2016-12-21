@@ -73,6 +73,7 @@ int main() {
 
         BeginFrame();
         {
+            ClearBackground(WHITE);
             FillTriXY(.0, .0, .0, .5, .25, .25, RED);
             FillTriXY(.0, .0, .25, .25, .5, .0, GREEN);
             FillTriXY(.5, .0, .5, .5, .0, .5, BLUE);
@@ -86,7 +87,7 @@ int main() {
             FillCircle(mouse, .05, ORANGE);
 
             DrawTexture(sprite, (Rect){1.f, .6f, .36, .06});
-            DrawTextureClip(sprite, (Rect){-1.f, .6f, .36, .06}, (Rect){3, 3, 6, 6});
+            DrawTextureClip(sprite, (Rect){-1.f, .6f, .06f, .06f}, (Rect){0, 0, 6, 6});
             // FillRect((Rect){mouse.x, mouse.y, .5, .5}, (Color){fabs(mouse.x) * 80, fabs(mouse.y) * 100, 0, 1});
         }
         EndFrame();

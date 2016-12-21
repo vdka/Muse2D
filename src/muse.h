@@ -204,8 +204,8 @@ API void FillCircle(V2 center, f32 radius, Color color);
 
 API void DrawTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color);                    // Draw a Triangle outline
 API void FillTriXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, Color color);                    // Fill a Triangle
-API void DrawRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Draw a Rectangle outline
-API void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Fill a Rectangle
+API void DrawQuadXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Draw a Rectangle outline
+API void FillQuadXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color);   // Fill a Rectangle
 
 API void DrawTexture(u32 id, Rect rect);
 
@@ -1311,7 +1311,7 @@ DEF void FillCircle(V2 center, f32 radius, Color color) {
     FillPoly(center, sides, radius, color);
 }
 
-DEF void DrawRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color) {
+DEF void DrawQuadXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color) {
     setBuffer(&connectedLines);
     setColor(color);
     {
@@ -1326,7 +1326,7 @@ DEF void DrawRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 
     BufferDraw(&connectedLines);
 }
 
-DEF void FillRectXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color) {
+DEF void FillQuadXY(f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3, f32 x4, f32 y4, Color color) {
     setBuffer(&quads);
     setColor(color);
     {
@@ -1365,25 +1365,23 @@ DEF void DrawTexture(u32 id, Rect rect) {
 DEF void DrawTextureClip(u32 id, Rect destRect, Rect srcRect) {
     f32 halfDestWidth   = destRect.width  / 2;
     f32 halfDestHeight  = destRect.height / 2;
-    f32 halfSrcWidth    = srcRect.width  / 2;
-    f32 halfSrcHeight   = srcRect.height / 2;
     f32* coords = &currentAtlas->texcoords[id * 4];
     V2 textureTopLeft = {coords[0], coords[1]};
-    V2 textureBottomRight = {coords[2], coords[3]};
+
     setColor(WHITE);
     setBuffer(&texturedQuads);
     {
         vertex(destRect.x - halfDestWidth, destRect.y + halfDestHeight); // tl
-        texcoord(textureTopLeft.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureTopLeft.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+        texcoord(textureTopLeft.x + srcRect.x / ATLAS_SIZE, textureTopLeft.y - srcRect.y / ATLAS_SIZE);
 
         vertex(destRect.x - halfDestWidth, destRect.y - halfDestHeight); // bl
-        texcoord(textureTopLeft.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureBottomRight.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+        texcoord(textureTopLeft.x + srcRect.x / ATLAS_SIZE, textureTopLeft.y - (srcRect.y + srcRect.height) / ATLAS_SIZE);
 
         vertex(destRect.x + halfDestWidth, destRect.y - halfDestHeight); // br
-        texcoord(textureBottomRight.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureBottomRight.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+        texcoord(textureTopLeft.x + (srcRect.x + srcRect.width) / ATLAS_SIZE, textureTopLeft.y - (srcRect.y + srcRect.height) / ATLAS_SIZE);
 
         vertex(destRect.x + halfDestWidth, destRect.y + halfDestHeight); // tr
-        texcoord(textureBottomRight.x + srcRect.x - halfSrcWidth / ATLAS_SIZE, textureTopLeft.y - srcRect.y + halfSrcHeight / ATLAS_SIZE);
+        texcoord(textureTopLeft.x + (srcRect.x + srcRect.width) / ATLAS_SIZE, textureTopLeft.y - srcRect.y / ATLAS_SIZE);
     }
     setBuffer(NULL);
 }
